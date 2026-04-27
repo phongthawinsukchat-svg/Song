@@ -1,0 +1,470 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>In-ear Cue Maker</title>
+  <style>
+    :root {
+      --bg: #0f1220;
+      --panel: #171b2f;
+      --panel2: #202641;
+      --text: #f4f6ff;
+      --muted: #9fa8c7;
+      --accent: #7c5cff;
+      --accent2: #00d4ff;
+      --danger: #ff4d6d;
+      --ok: #35d07f;
+      --line: rgba(255,255,255,.12);
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: radial-gradient(circle at top left, #27305a 0%, var(--bg) 40%, #070913 100%);
+      color: var(--text);
+      min-height: 100vh;
+    }
+    .wrap { max-width: 1180px; margin: 0 auto; padding: 24px; }
+    header { display: flex; gap: 16px; justify-content: space-between; align-items: center; margin-bottom: 18px; }
+    h1 { margin: 0; font-size: clamp(24px, 4vw, 42px); letter-spacing: -1px; }
+    .tag { color: var(--muted); margin-top: 6px; }
+    .grid { display: grid; grid-template-columns: 360px 1fr; gap: 16px; }
+    .card {
+      background: rgba(23, 27, 47, .84);
+      border: 1px solid var(--line);
+      border-radius: 20px;
+      padding: 18px;
+      box-shadow: 0 20px 60px rgba(0,0,0,.25);
+      backdrop-filter: blur(14px);
+    }
+    label { display: block; font-size: 13px; color: var(--muted); margin: 12px 0 7px; }
+    input, select, textarea {
+      width: 100%;
+      background: var(--panel2);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      color: var(--text);
+      padding: 12px;
+      outline: none;
+    }
+    input[type=file] { padding: 10px; }
+    input[type=range] { padding: 0; }
+    button {
+      appearance: none;
+      border: 0;
+      border-radius: 13px;
+      padding: 12px 14px;
+      color: white;
+      background: linear-gradient(135deg, var(--accent), #5b8cff);
+      font-weight: 700;
+      cursor: pointer;
+      transition: transform .12s ease, opacity .12s ease;
+    }
+    button:hover { transform: translateY(-1px); }
+    button:disabled { opacity: .45; cursor: not-allowed; transform: none; }
+    .btn2 { background: #2d365c; }
+    .btn3 { background: linear-gradient(135deg, var(--ok), #16a66a); }
+    .danger { background: linear-gradient(135deg, var(--danger), #ff8a5b); }
+    .row { display: flex; gap: 10px; align-items: center; }
+    .row > * { flex: 1; }
+    .small { font-size: 12px; color: var(--muted); }
+    .transport { display: flex; flex-wrap: wrap; gap: 10px; margin: 14px 0; }
+    .time { font-variant-numeric: tabular-nums; font-size: 24px; font-weight: 800; }
+    .timeline {
+      position: relative;
+      height: 190px;
+      background: linear-gradient(180deg, #10152a, #0b0e1a);
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      overflow: hidden;
+      margin-top: 12px;
+      cursor: crosshair;
+    }
+    canvas { width: 100%; height: 100%; display: block; }
+    .playhead {
+      position: absolute;
+      top: 0; bottom: 0;
+      width: 2px;
+      background: var(--accent2);
+      box-shadow: 0 0 18px var(--accent2);
+      pointer-events: none;
+      left: 0;
+    }
+    .cue-marker {
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      width: 3px;
+      background: #ffd166;
+      box-shadow: 0 0 16px rgba(255,209,102,.75);
+    }
+    .cue-label {
+      position: absolute;
+      top: 8px;
+      transform: translateX(-50%);
+      background: rgba(255,209,102,.16);
+      border: 1px solid rgba(255,209,102,.5);
+      color: #ffe8a3;
+      padding: 4px 8px;
+      border-radius: 999px;
+      font-size: 12px;
+      white-space: nowrap;
+    }
+    table { width: 100%; border-collapse: collapse; margin-top: 12px; }
+    th, td { border-bottom: 1px solid var(--line); padding: 10px 8px; text-align: left; font-size: 14px; }
+    th { color: var(--muted); font-weight: 600; }
+    .pill { display:inline-flex; align-items:center; gap: 6px; padding: 5px 9px; background: #252c4c; border-radius: 999px; color: var(--muted); font-size: 12px; }
+    .status { margin-top: 10px; color: var(--muted); min-height: 20px; }
+    .kbd { background:#0b0e1a; border:1px solid var(--line); border-radius:6px; padding:1px 6px; color:#fff; }
+    .footer { margin-top: 14px; color: var(--muted); font-size: 12px; }
+    @media (max-width: 900px) { .grid { grid-template-columns: 1fr; } header { align-items:flex-start; flex-direction:column; } }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <div>
+        <h1>In-ear Cue Maker</h1>
+        <div class="tag">ใส่เพลง → วาง cue → เสียงนับก่อนเข้าฮุก → Export WAV</div>
+      </div>
+      <div class="pill">MVP v1 • ใช้ในเครื่อง ไม่อัปโหลดไฟล์</div>
+    </header>
+
+    <div class="grid">
+      <section class="card">
+        <h2 style="margin-top:0">ตั้งค่าเพลง</h2>
+        <label>1) เลือกไฟล์เพลง MP3/WAV</label>
+        <input id="file" type="file" accept="audio/*" />
+
+        <div class="row">
+          <div>
+            <label>BPM</label>
+            <input id="bpm" type="number" value="120" min="40" max="240" />
+          </div>
+          <div>
+            <label>Beats / Bar</label>
+            <input id="beats" type="number" value="4" min="2" max="12" />
+          </div>
+        </div>
+
+        <label>เสียง Cue</label>
+        <select id="voiceMode">
+          <option value="thai">เสียงพูดไทย: 4 3 2 1 ฮุก</option>
+          <option value="beep">เสียงบี๊บ + ฮุก</option>
+          <option value="mixed">เสียงพูด + บี๊บเบา</option>
+        </select>
+
+        <label>ความดัง Cue</label>
+        <input id="cueVol" type="range" min="0" max="1" step="0.01" value="0.9" />
+
+        <label>ความดัง Click</label>
+        <input id="clickVol" type="range" min="0" max="1" step="0.01" value="0.25" />
+
+        <label>รูปแบบ Export</label>
+        <select id="exportMode">
+          <option value="cueOnly">Cue + Click อย่างเดียว</option>
+          <option value="stereo">Stereo: เพลงซ้าย / Cue+Click ขวา</option>
+          <option value="mix">Mix เพลง + Cue + Click</option>
+        </select>
+
+        <div class="transport">
+          <button id="play" disabled>▶ เล่น</button>
+          <button id="pause" class="btn2" disabled>⏸ หยุด</button>
+          <button id="addHook" class="btn3" disabled>+ Cue เข้าฮุก</button>
+          <button id="addCustom" class="btn2" disabled>+ Cue เอง</button>
+          <button id="export" class="btn3" disabled>Export WAV</button>
+        </div>
+
+        <label>ข้อความ Cue เอง</label>
+        <input id="customText" value="เตรียมเข้าอีกท่อน" />
+
+        <div class="small">
+          ทิป: กด <span class="kbd">Space</span> เล่น/หยุด, กด <span class="kbd">H</span> วาง cue ฮุกที่ตำแหน่งปัจจุบัน
+        </div>
+        <div id="status" class="status">รอเลือกไฟล์เพลง...</div>
+      </section>
+
+      <section class="card">
+        <div class="row" style="justify-content:space-between; align-items:flex-start;">
+          <div>
+            <h2 style="margin:0">Timeline</h2>
+            <div class="small">คลิกที่ไทม์ไลน์เพื่อกระโดดตำแหน่งเพลง</div>
+          </div>
+          <div class="time" id="time">00:00.000</div>
+        </div>
+
+        <div id="timeline" class="timeline">
+          <canvas id="wave"></canvas>
+          <div id="playhead" class="playhead"></div>
+          <div id="markers"></div>
+        </div>
+
+        <table>
+          <thead>
+            <tr><th>เวลา</th><th>ประเภท</th><th>ข้อความ</th><th>ลบ</th></tr>
+          </thead>
+          <tbody id="cueList"></tbody>
+        </table>
+
+        <div class="footer">
+          หมายเหตุ: เสียงพูดใช้ SpeechSynthesis ของ Browser ตอนพรีวิว ส่วนตอน Export จะสร้างเป็นเสียงบี๊บ/โทนและจังหวะนับที่แม่นเวลา เพื่อให้ไฟล์ออกได้เสถียร
+        </div>
+      </section>
+    </div>
+  </div>
+
+<script>
+let audioCtx, buffer, source, startTime = 0, pauseAt = 0, isPlaying = false, raf;
+let cues = [];
+let clickNodes = [];
+let lastClickBeat = -1;
+const $ = id => document.getElementById(id);
+
+const fileEl = $('file'), playBtn = $('play'), pauseBtn = $('pause'), addHookBtn = $('addHook'), addCustomBtn = $('addCustom'), exportBtn = $('export');
+const bpmEl = $('bpm'), beatsEl = $('beats'), statusEl = $('status'), timeEl = $('time'), timeline = $('timeline'), wave = $('wave'), playhead = $('playhead'), markers = $('markers'), cueList = $('cueList');
+
+function fmt(t) {
+  const m = Math.floor(t / 60).toString().padStart(2,'0');
+  const s = Math.floor(t % 60).toString().padStart(2,'0');
+  const ms = Math.floor((t % 1) * 1000).toString().padStart(3,'0');
+  return `${m}:${s}.${ms}`;
+}
+function currentTime() { return isPlaying ? Math.min(audioCtx.currentTime - startTime, buffer.duration) : pauseAt; }
+function beatDur() { return 60 / Number(bpmEl.value || 120); }
+function barDur() { return beatDur() * Number(beatsEl.value || 4); }
+
+fileEl.addEventListener('change', async e => {
+  const file = e.target.files[0];
+  if (!file) return;
+  statusEl.textContent = 'กำลังอ่านไฟล์เพลง...';
+  audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  const arr = await file.arrayBuffer();
+  buffer = await audioCtx.decodeAudioData(arr);
+  pauseAt = 0; cues = [];
+  drawWaveform(); renderCues(); updateButtons(true);
+  statusEl.textContent = `โหลดแล้ว: ${file.name} • ความยาว ${fmt(buffer.duration)}`;
+});
+
+function updateButtons(ok) { [playBtn,pauseBtn,addHookBtn,addCustomBtn,exportBtn].forEach(b => b.disabled = !ok); }
+
+function play() {
+  if (!buffer || isPlaying) return;
+  source = audioCtx.createBufferSource();
+  source.buffer = buffer;
+  source.connect(audioCtx.destination);
+  startTime = audioCtx.currentTime - pauseAt;
+  source.start(0, pauseAt);
+  source.onended = () => { if (currentTime() >= buffer.duration - .03) stop(false); };
+  isPlaying = true;
+  lastClickBeat = -1;
+  tick();
+}
+function stop(reset=true) {
+  if (source) { try { source.stop(); } catch(e) {} source.disconnect(); source = null; }
+  isPlaying = false;
+  if (reset) pauseAt = currentTime();
+  cancelAnimationFrame(raf);
+  tickOnce();
+}
+function seek(t) {
+  pauseAt = Math.max(0, Math.min(buffer.duration, t));
+  if (isPlaying) { stop(false); play(); }
+  tickOnce();
+}
+playBtn.onclick = play;
+pauseBtn.onclick = () => stop(true);
+
+timeline.addEventListener('click', e => {
+  if (!buffer) return;
+  const r = timeline.getBoundingClientRect();
+  seek(((e.clientX - r.left) / r.width) * buffer.duration);
+});
+
+function tick() {
+  tickOnce();
+  const t = currentTime();
+  schedulePreviewCues(t);
+  if (t >= buffer.duration) { pauseAt = 0; stop(false); return; }
+  raf = requestAnimationFrame(tick);
+}
+function tickOnce() {
+  if (!buffer) return;
+  const t = currentTime();
+  timeEl.textContent = fmt(t);
+  playhead.style.left = `${(t / buffer.duration) * 100}%`;
+}
+
+function schedulePreviewCues(t) {
+  const bd = beatDur();
+  const beatIndex = Math.floor(t / bd);
+  if (beatIndex !== lastClickBeat) {
+    lastClickBeat = beatIndex;
+    previewBeep(beatIndex % Number(beatsEl.value) === 0 ? 900 : 600, 0.035, Number($('clickVol').value));
+  }
+  cues.forEach(c => {
+    if (!c.fired && t >= c.time) {
+      c.fired = true;
+      speakCue(c.text);
+      previewBeep(1200, 0.12, Number($('cueVol').value) * .55);
+    }
+    if (t < c.time - .2) c.fired = false;
+  });
+}
+function previewBeep(freq, dur, vol) {
+  if (!audioCtx || vol <= 0) return;
+  const osc = audioCtx.createOscillator();
+  const gain = audioCtx.createGain();
+  osc.frequency.value = freq;
+  gain.gain.setValueAtTime(vol, audioCtx.currentTime);
+  gain.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + dur);
+  osc.connect(gain).connect(audioCtx.destination);
+  osc.start(); osc.stop(audioCtx.currentTime + dur);
+}
+function speakCue(text) {
+  const mode = $('voiceMode').value;
+  if (mode === 'beep') return;
+  if ('speechSynthesis' in window) {
+    const u = new SpeechSynthesisUtterance(text);
+    u.lang = 'th-TH';
+    u.rate = 1.08;
+    u.volume = Number($('cueVol').value);
+    speechSynthesis.cancel();
+    speechSynthesis.speak(u);
+  }
+}
+
+function addCue(time, type, text) {
+  cues.push({ time: Math.max(0, Math.min(buffer.duration, time)), type, text, fired:false });
+  cues.sort((a,b) => a.time - b.time);
+  renderCues();
+}
+addHookBtn.onclick = () => {
+  const t = currentTime();
+  const lead = barDur();
+  addCue(Math.max(0, t - lead), 'countdown', 'อีก 1 ห้อง เข้าฮุก 4 3 2 1 ฮุก');
+  addCue(t, 'hook', 'ฮุก');
+};
+addCustomBtn.onclick = () => addCue(currentTime(), 'custom', $('customText').value || 'cue');
+
+function renderCues() {
+  markers.innerHTML = ''; cueList.innerHTML = '';
+  cues.forEach((c, i) => {
+    const x = buffer ? (c.time / buffer.duration) * 100 : 0;
+    const line = document.createElement('div'); line.className = 'cue-marker'; line.style.left = `${x}%`; markers.appendChild(line);
+    const lab = document.createElement('div'); lab.className = 'cue-label'; lab.style.left = `${x}%`; lab.textContent = c.type; markers.appendChild(lab);
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td>${fmt(c.time)}</td><td>${c.type}</td><td>${escapeHtml(c.text)}</td><td><button class="danger" style="padding:7px 10px" data-i="${i}">ลบ</button></td>`;
+    cueList.appendChild(tr);
+  });
+  cueList.querySelectorAll('button').forEach(b => b.onclick = () => { cues.splice(Number(b.dataset.i),1); renderCues(); });
+}
+function escapeHtml(s){ return s.replace(/[&<>"]/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m])); }
+
+function drawWaveform() {
+  const rect = timeline.getBoundingClientRect();
+  const dpr = window.devicePixelRatio || 1;
+  wave.width = rect.width * dpr; wave.height = rect.height * dpr;
+  const ctx = wave.getContext('2d'); ctx.scale(dpr,dpr);
+  ctx.clearRect(0,0,rect.width,rect.height);
+  const data = buffer.getChannelData(0);
+  const step = Math.ceil(data.length / rect.width);
+  const amp = rect.height / 2;
+  ctx.strokeStyle = 'rgba(124,92,255,.95)'; ctx.lineWidth = 1;
+  ctx.beginPath();
+  for (let x=0; x<rect.width; x++) {
+    let min=1, max=-1;
+    for (let j=0; j<step; j++) {
+      const v = data[(x*step)+j] || 0;
+      if (v < min) min = v; if (v > max) max = v;
+    }
+    ctx.moveTo(x, (1+min)*amp);
+    ctx.lineTo(x, (1+max)*amp);
+  }
+  ctx.stroke();
+}
+window.addEventListener('resize', () => { if(buffer) drawWaveform(); });
+
+document.addEventListener('keydown', e => {
+  if (!buffer) return;
+  if (e.code === 'Space') { e.preventDefault(); isPlaying ? stop(true) : play(); }
+  if (e.key.toLowerCase() === 'h') addHookBtn.click();
+});
+
+exportBtn.onclick = async () => {
+  if (!buffer) return;
+  statusEl.textContent = 'กำลัง Export WAV...';
+  await new Promise(r => setTimeout(r, 50));
+  const mode = $('exportMode').value;
+  const sr = 44100;
+  const len = Math.ceil(buffer.duration * sr);
+  const out = new AudioBuffer({ length: len, sampleRate: sr, numberOfChannels: mode === 'stereo' ? 2 : 1 });
+  const outL = out.getChannelData(0);
+  const outR = mode === 'stereo' ? out.getChannelData(1) : outL;
+  const cueTrack = new Float32Array(len);
+  if (mode === 'mix') mixOriginal(outL, 0.75, sr);
+  if (mode === 'stereo') mixOriginal(outL, 0.9, sr);
+  renderClickAndCues(cueTrack, sr);
+  for (let i=0;i<len;i++) {
+    if (mode === 'stereo') outR[i] += cueTrack[i];
+    else outL[i] += cueTrack[i];
+  }
+  const wavBlob = audioBufferToWavBlob(out);
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(wavBlob);
+  a.download = 'inear-cue-track.wav';
+  a.click();
+  statusEl.textContent = 'Export สำเร็จ: inear-cue-track.wav';
+};
+function mixOriginal(target, vol, sr) {
+  const src = buffer.getChannelData(0);
+  const ratio = buffer.sampleRate / sr;
+  for (let i=0;i<target.length;i++) target[i] += (src[Math.floor(i*ratio)] || 0) * vol;
+}
+function renderClickAndCues(track, sr) {
+  const bd = beatDur(), bars = Number(beatsEl.value), cv = Number($('clickVol').value), qv = Number($('cueVol').value);
+  for (let t=0; t<buffer.duration; t += bd) {
+    const beat = Math.round(t / bd);
+    addTone(track, sr, t, beat % bars === 0 ? 1000 : 650, .035, cv);
+  }
+  cues.forEach(c => {
+    if (c.type === 'countdown') {
+      const parts = [4,3,2,1];
+      parts.forEach((n, idx) => addTone(track, sr, c.time + idx*bd, 500 + n*130, .18, qv));
+      addTone(track, sr, c.time + 4*bd, 1300, .26, qv);
+    } else if (c.type === 'hook') {
+      addTone(track, sr, c.time, 1400, .35, qv);
+      addTone(track, sr, c.time + .38, 1800, .18, qv*.8);
+    } else {
+      addTone(track, sr, c.time, 1100, .22, qv);
+      addTone(track, sr, c.time + .25, 900, .22, qv*.7);
+    }
+  });
+}
+function addTone(track, sr, time, freq, dur, vol) {
+  const start = Math.floor(time * sr); const n = Math.floor(dur * sr);
+  for (let i=0;i<n && start+i<track.length;i++) {
+    const env = Math.exp(-5*i/n);
+    track[start+i] += Math.sin(2*Math.PI*freq*i/sr) * vol * env * .55;
+  }
+}
+function audioBufferToWavBlob(abuffer) {
+  const numCh = abuffer.numberOfChannels, sr = abuffer.sampleRate, len = abuffer.length;
+  const bytes = 44 + len * numCh * 2;
+  const buf = new ArrayBuffer(bytes); const view = new DataView(buf);
+  let off = 0;
+  const write = s => { for (let i=0;i<s.length;i++) view.setUint8(off++, s.charCodeAt(i)); };
+  write('RIFF'); view.setUint32(off, bytes-8, true); off+=4; write('WAVE');
+  write('fmt '); view.setUint32(off, 16, true); off+=4; view.setUint16(off, 1, true); off+=2;
+  view.setUint16(off, numCh, true); off+=2; view.setUint32(off, sr, true); off+=4;
+  view.setUint32(off, sr*numCh*2, true); off+=4; view.setUint16(off, numCh*2, true); off+=2; view.setUint16(off, 16, true); off+=2;
+  write('data'); view.setUint32(off, len*numCh*2, true); off+=4;
+  for (let i=0;i<len;i++) for (let ch=0;ch<numCh;ch++) {
+    let sample = Math.max(-1, Math.min(1, abuffer.getChannelData(ch)[i]));
+    view.setInt16(off, sample < 0 ? sample*0x8000 : sample*0x7fff, true); off+=2;
+  }
+  return new Blob([buf], {type:'audio/wav'});
+}
+</script>
+</body>
+</html>
